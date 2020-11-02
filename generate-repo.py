@@ -2,7 +2,7 @@
 
 import datetime
 import multiprocessing
-from Queue import Queue
+from queue import Queue
 import random
 from optparse import OptionParser
 import os
@@ -11,12 +11,12 @@ import subprocess
 import sys
 import threading
 
-TYPES = ["security","bugfix","enhancement"]
+TYPES = ["security", "bugfix", "enhancement"]
 FORMAT = "%Y-%m-%d %H:%M:%S"
 try:
     ERRATA_TEMPLATE = open(os.path.join(os.path.dirname(__file__), "errata-template.xml")).read()
-except Exception, e:
-    print "Was not able to open errata template file: %s" % str(e)
+except Exception as e:
+    print(f'Was not able to open errata template file: {str(e)}')
     sys.exit(-1)
 
 jobs = Queue()
@@ -27,25 +27,25 @@ print_lock = threading.Lock()
 
 def generate_errata(last_rev, name, version):
     errata = ERRATA_TEMPLATE
-    errata = errata.replace("%%ERRATAID%%",('RHEA-2012:%s' % random.randint(1,10000)))
-    errata = errata.replace("%%REL%%", str(last_rev))                
+    errata = errata.replace("%%ERRATAID%%", ('RHEA-2012:%s' % random.randint(1, 10000)))
+    errata = errata.replace("%%REL%%", str(last_rev))
     errata = errata.replace("%%NAME%%", name)
     errata = errata.replace("%%VER%%", version)
     errata = errata.replace("%%TYPE%%", TYPES[random.randint(0,2)])
     errata = errata.replace("%%DATE%%", datetime.date(datetime.date.today().year - 1, random.randint(1,12), random.randint(1,28)).strftime(FORMAT))
     return errata
-  
+
 
 def shell_exec(command):
     with print_lock:
-        print "Executing: $ %s" % command
+        print(f'Executing: $ {command}')
     process = subprocess.Popen(command, stderr=subprocess.PIPE, stdout=subprocess.PIPE, shell=True)
     output = process.communicate()
     stdout = output[0]
     stderr = output[1]
     if process.returncode != 0:
-        print "STDOUT: %s" % stdout
-        print "STDERROR: %s" % stderr
+        print(f'STDOUT: {stdout}')
+        print(f'STDERROR: {stderr}')
         exit(process.returncode)
 
 
@@ -57,8 +57,8 @@ def read_dictionary(wordsfile):
     try:
         with open(os.path.expanduser(wordsfile)) as fd:
             wordslist = [(word.replace(" ", "").strip()).replace("-", "") for word in fd.readlines()]
-    except Exception, e:
-        print "Was not able to open the words file %s: %s" % (wordsfile, str(e))
+    except Exception as e:
+        print(f'Was not able to open the words file {wordsfile}: {str(e)}')
         sys.exit(-1)
 
     return wordslist
@@ -88,7 +88,7 @@ def uniquefy_package(package_names, max_size):
     return (package_name, version, size)
 
 
-def generate_package(multiples, package_names, size): 
+def generate_package(multiples, package_names, size):
     errata = []
     while not jobs.empty():
         job = jobs.get()
@@ -128,24 +128,23 @@ def generate_repo(output, number, size, multiples, dictionary, processes):
         worker.start()
 
     jobs.join()
-                
+
     # Generate one specific package name you know is always there with multiple revs
     shell_exec("./generate-package.bash acme-package 1.0.1 1")
     shell_exec("./generate-package.bash acme-package 1.0.2 1")
     all_errata.append(generate_errata("1", "acme-package", "1.0.2"))
     shell_exec("./generate-package.bash acme-package 1.1.2 1")
     all_errata.append(generate_errata("1", "acme-package", "1.1.2"))
-    
-    
-    #bad string concats but I'm lazy                
+
+    #bad string concats but I'm lazy
     errata_xml = "<?xml version=\"1.0\"?>\n<updates>" + ''.join(all_errata)
     errata_xml = errata_xml + "</updates>\n"
     updatedinfo = os.path.expanduser(os.path.join(output, "updateinfo.xml"))
     try:
         with open(updatedinfo, 'w') as errata_file:
             errata_file.write(errata_xml)
-    except Exception, e:
-        print "Could not save the errata file! %s" % str(e)
+    except Exception as e:
+        print(f'Could not save the errata file! {str(e)}')
         sys.exit(-1)
 
 
@@ -153,10 +152,10 @@ def generate_repo(output, number, size, multiples, dictionary, processes):
     os.system("createrepo %s" % output)
     os.system("modifyrepo %s/updateinfo.xml %s/repodata/" % (output,output))
 
-    print "\n\n\n"
-    print "==========================================================="
-    print "Your new fake repo is available at: %s" % output
-    print "You may want to clean out your $HOME/rpmbuild dir as well.\n"
+    print("\n\n\n")
+    print("===========================================================")
+    print(f'Your new fake repo is available at: {output}')
+    print(f'You might want to clean out your $HOME/rpmbuild dir as well.\n')
 
 
 if __name__ == '__main__':
@@ -169,10 +168,10 @@ if __name__ == '__main__':
     version = "%prog version 0.1"
 
     parser = OptionParser(usage=usage, description=description, epilog=epilog, version=version)
-    parser.add_option('-s', '--size',  dest='size', 
+    parser.add_option('-s', '--size',  dest='size',
         help='maximum size in KB for created packages', type=int, default=100)
     parser.add_option('-n', '--number',  dest='number',  type=int, default=5)
-    parser.add_option('-m', '--multiples',  dest='multiples',  
+    parser.add_option('-m', '--multiples',  dest='multiples',
         help="generate 0-3 random new versions of each package and errata",
         action="store_true", default=False)
     parser.add_option('-o', '--output',  dest='output', type="str", default='/var/tmp/generated-repo')
